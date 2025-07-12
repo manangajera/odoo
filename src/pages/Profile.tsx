@@ -10,12 +10,17 @@ import {
   Plus,
   Eye,
   EyeOff,
-  Star
+  Star,
+  Camera,
+  Upload,
+  Trash2
 } from 'lucide-react';
 
 export default function Profile() {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, uploadProfilePhoto, deleteProfilePhoto } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || '',
     location: user?.location || '',
@@ -27,6 +32,7 @@ export default function Profile() {
   });
   const [currentSkillOffered, setCurrentSkillOffered] = useState('');
   const [currentSkillWanted, setCurrentSkillWanted] = useState('');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const availabilityOptions = ['Weekdays', 'Weekends', 'Evenings', 'Mornings'];
 
@@ -91,6 +97,48 @@ export default function Profile() {
     }));
   };
 
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB');
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    try {
+      await uploadProfilePhoto(file);
+      setShowPhotoOptions(false);
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      alert('Failed to upload photo. Please try again.');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const handleDeletePhoto = async () => {
+    if (!user?.profilePhoto) return;
+    
+    if (window.confirm('Are you sure you want to delete your profile photo?')) {
+      try {
+        await deleteProfilePhoto();
+        setShowPhotoOptions(false);
+      } catch (error) {
+        console.error('Error deleting photo:', error);
+        alert('Failed to delete photo. Please try again.');
+      }
+    }
+  };
+
   if (!user) return null;
 
   return (
@@ -99,20 +147,65 @@ export default function Profile() {
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-12">
           <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6">
-            <div className="relative">
+            <div className="relative group">
               {user.profilePhoto ? (
                 <img
                   src={user.profilePhoto}
                   alt={user.name}
-                  className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg"
+                  className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg transition-opacity duration-200 group-hover:opacity-75"
                 />
               ) : (
-                <div className="w-32 h-32 bg-white/20 rounded-full flex items-center justify-center border-4 border-white shadow-lg">
+                <div className="w-32 h-32 bg-white/20 rounded-full flex items-center justify-center border-4 border-white shadow-lg transition-opacity duration-200 group-hover:opacity-75">
                   <UserIcon className="w-16 h-16 text-white" />
                 </div>
               )}
+              
+              {/* Photo Edit Button */}
+              <button
+                onClick={() => setShowPhotoOptions(!showPhotoOptions)}
+                className="absolute bottom-2 right-2 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition-colors duration-200 shadow-lg"
+                disabled={isUploadingPhoto}
+              >
+                {isUploadingPhoto ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                ) : (
+                  <Camera className="w-4 h-4" />
+                )}
+              </button>
+              
+              {/* Photo Options Dropdown */}
+              {showPhotoOptions && (
+                <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-10 min-w-[160px]">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Upload Photo</span>
+                  </button>
+                  {user.profilePhoto && (
+                    <button
+                      onClick={handleDeletePhoto}
+                      className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Delete Photo</span>
+                    </button>
+                  )}
+                </div>
+              )}
+              
               <div className="absolute -bottom-2 -right-2 bg-green-500 w-8 h-8 rounded-full border-4 border-white"></div>
             </div>
+            
+            {/* Hidden File Input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoUpload}
+              className="hidden"
+            />
             
             <div className="text-center sm:text-left text-white">
               <h1 className="text-3xl font-bold">{user.name}</h1>

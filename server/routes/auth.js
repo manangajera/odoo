@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
+const { upload, deleteFromCloudinary } = require('../middleware/upload');
 
 const router = express.Router();
 
@@ -320,6 +321,81 @@ router.post('/change-password', protect, [
     res.status(500).json({
       success: false,
       message: 'Server error changing password'
+    });
+  }
+});
+
+// @route   POST /api/auth/upload-photo
+// @desc    Upload profile photo
+// @access  Private
+router.post('/upload-photo', protect, upload.single('photo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No image file provided'
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    
+    // Delete old profile photo if exists
+    if (user.profilePhoto) {
+      await deleteFromCloudinary(user.profilePhoto);
+    }
+
+    // Update user with new profile photo URL
+    user.profilePhoto = req.file.path;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Profile photo updated successfully',
+      profilePhoto: req.file.path,
+      user: user.getPublicProfile()
+    });
+
+  } catch (error) {
+    console.error('Upload photo error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error uploading photo'
+    });
+  }
+});
+
+// @route   DELETE /api/auth/delete-photo
+// @desc    Delete profile photo
+// @access  Private
+router.delete('/delete-photo', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    
+    if (!user.profilePhoto) {
+      return res.status(400).json({
+        success: false,
+        message: 'No profile photo to delete'
+      });
+    }
+
+    // Delete from Cloudinary
+    await deleteFromCloudinary(user.profilePhoto);
+
+    // Remove from user profile
+    user.profilePhoto = null;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Profile photo deleted successfully',
+      user: user.getPublicProfile()
+    });
+
+  } catch (error) {
+    console.error('Delete photo error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error deleting photo'
     });
   }
 });
