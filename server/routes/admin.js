@@ -459,6 +459,96 @@ router.post('/announcements', [
   }
 });
 
+// @route   POST /api/admin/send-alert
+// @desc    Send platform-wide alert email to all users
+// @access  Admin
+router.post('/send-alert', [
+  body('message')
+    .trim()
+    .isLength({ min: 1, max: 1000 })
+    .withMessage('Message must be between 1 and 1000 characters'),
+  body('type')
+    .optional()
+    .isIn(['alert', 'downtime', 'maintenance'])
+    .withMessage('Invalid alert type'),
+  body('subject')
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Subject cannot exceed 100 characters')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { message, type = 'alert', subject } = req.body;
+
+    // Get all active users (not banned)
+    const users = await User.find({ 
+      isBanned: false,
+      isAdmin: false 
+    }).select('name email');
+
+    if (users.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active users found to send alerts to'
+      });
+    }
+
+    // Choose email template based on type
+    let template = emailTemplates.platformAlert;
+    if (type === 'downtime' || type === 'maintenance') {
+      template = emailTemplates.downtime;
+    }
+
+    // Use custom subject if provided
+    const emailSubject = subject || template.subject;
+    const emailText = template.text.replace('{{message}}', message);
+    const emailHtml = template.html.replace('{{message}}', message);
+
+    // Send bulk emails
+    const results = await sendBulkEmail(users, emailSubject, emailText, emailHtml);
+
+    // Count successful and failed sends
+    const successful = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+
+    // Create announcement record
+    const announcement = new Announcement({
+      title: emailSubject,
+      message,
+      type: type === 'downtime' ? 'warning' : 'info',
+      createdBy: req.user._id
+    });
+    await announcement.save();
+
+    res.json({
+      success: true,
+      message: `Alert sent successfully to ${successful} users${failed > 0 ? `, ${failed} failed` : ''}`,
+      data: {
+        totalUsers: users.length,
+        successful,
+        failed,
+        announcement: announcement._id
+      }
+    });
+
+  } catch (error) {
+    console.error('Send alert error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error sending alert'
+    });
+  }
+});
+
 // @route   GET /api/admin/reports/users
 // @desc    Generate user activity report
 // @access  Admin

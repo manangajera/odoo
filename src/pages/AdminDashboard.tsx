@@ -12,14 +12,42 @@ import {
   Star,
   Calendar,
   Download,
-  Send
+  Send,
+  Mail,
+  AlertCircle as AlertIcon // Add this line for the alert button icon
 } from 'lucide-react';
+import axios from 'axios';
+
+
+// Configure axios defaults
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+axios.defaults.baseURL = API_BASE_URL;
 
 export default function AdminDashboard() {
   const { users, swapRequests, banUser, unbanUser } = useData();
   const { user } = useAuth();
   const [selectedTab, setSelectedTab] = useState<'overview' | 'users' | 'swaps' | 'reports'>('overview');
   const [announcementMessage, setAnnouncementMessage] = useState('');
+
+  // Add these lines for the alert system state
+  const [alertType, setAlertType] = useState<'alert' | 'downtime' | 'maintenance'>('alert');
+  const [alertSubject, setAlertSubject] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [isSendingAlert, setIsSendingAlert] = useState(false);
+
+  // Add this function for sending alerts (dummy implementation)
+  const handleSendAlert = () => {
+    if (!alertMessage.trim()) return;
+    setIsSendingAlert(true);
+    // Replace with your API call
+    setTimeout(() => {
+      alert('Alert sent!');
+      setIsSendingAlert(false);
+      setAlertMessage('');
+      setAlertSubject('');
+      setAlertType('alert');
+    }, 1500);
+  };
 
   if (!user?.isAdmin) {
     return (
@@ -163,6 +191,81 @@ export default function AdminDashboard() {
                 <div className="ml-4">
                   <p className="text-sm text-gray-600">Completed</p>
                   <p className="text-2xl font-bold text-gray-900">{completedSwaps}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Email Alert System */}
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+              <Mail className="w-5 h-5 mr-2" />
+              Send Platform Alert Email
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Alert Type
+                </label>
+                <select
+                  value={alertType}
+                  onChange={(e) => setAlertType(e.target.value as any)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="alert">General Alert</option>
+                  <option value="downtime">Downtime Notice</option>
+                  <option value="maintenance">Maintenance Notice</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Custom Subject (optional)
+                </label>
+                <input
+                  type="text"
+                  value={alertSubject}
+                  onChange={(e) => setAlertSubject(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Leave empty to use default subject"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Alert Message *
+                </label>
+                <textarea
+                  value={alertMessage}
+                  onChange={(e) => setAlertMessage(e.target.value)}
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder={
+                    alertType === 'downtime' 
+                      ? "The platform will be down for maintenance from 2:00 AM to 4:00 AM EST on Sunday, January 15th. During this time, you won't be able to access the platform."
+                      : alertType === 'maintenance'
+                      ? "We will be performing scheduled maintenance to improve platform performance. Expected duration: 2 hours."
+                      : "Important platform update or announcement message..."
+                  }
+                />
+              </div>
+              
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={handleSendAlert}
+                  disabled={!alertMessage.trim() || isSendingAlert}
+                  className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {isSendingAlert ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  ) : (
+                    <AlertIcon className="w-4 h-4" />
+                  )}
+                  <span>{isSendingAlert ? 'Sending...' : 'Send Alert to All Users'}</span>
+                </button>
+                
+                <div className="text-sm text-gray-600">
+                  This will send an email to all active users ({users.filter(u => !u.isAdmin && u.isPublic).length} users)
                 </div>
               </div>
             </div>
